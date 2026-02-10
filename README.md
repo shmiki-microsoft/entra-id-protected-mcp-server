@@ -50,7 +50,8 @@ MCP クライアント（例: MCP 対応のエージェント / エディタ拡�
 
 ## Microsoft Entra ID のアプリ登録とスコープ作成
 
-この MCP サーバーを利用するには、まず Microsoft Entra ID に API 用アプリ登録とスコープ定義を行います。
+この MCP サーバーは、Microsoft Entra ID の v2.0 アクセストークン (アプリ マニフェストの `requestedAccessTokenVersion=2`) を前提としています。
+そのため、まず Microsoft Entra ID に API 用アプリ登録とスコープ定義を行い、あわせてマニフェストでアクセストークン バージョンを 2 に設定します。
 
 1. Azure ポータルでアプリ登録
   - Azure ポータル → 「Microsoft Entra ID」→「アプリの登録」→「新規登録」
@@ -59,20 +60,25 @@ MCP クライアント（例: MCP 対応のエージェント / エディタ拡�
     - 「ディレクトリ (テナント) ID」 → `.env` の `ENTRA_TENANT_ID` に転記
     - 「アプリケーション (クライアント) ID」
 
-2. アプリケーション ID URI の設定 (Expose an API)
+2. アプリ マニフェストで `requestedAccessTokenVersion` を 2 に設定
+  - 対象アプリの「マニフェスト」メニューを開く
+  - `requestedAccessTokenVersion` プロパティを `2` に設定し、保存
+  - これにより、このアプリから発行されるアクセストークンは v2.0 形式になります
+
+3. アプリケーション ID URI の設定 (Expose an API)
   - 対象アプリの「Expose an API (API の公開)」に移動
   - 「Set」または「Application ID URI の設定」から、アプリケーション ID URI を設定
     - 例: `api://<アプリケーションID>` あるいは独自の URI
   - 設定した値を `.env` の `ENTRA_AUDIENCE` および Azure CLI 例の `$RESOURCE` に使用します。
 
-3. スコープ (`access_as_user`) の作成
+4. スコープ (`access_as_user`) の作成
   - 同じく「Expose an API (API の公開)」→「Add a scope (スコープの追加)」
   - Scope name に `access_as_user` を指定
   - Who can consent は「Admins and users」など適切なものを選択
   - Display name / Description / Admin consent display name などを入力し、「Enabled」がオンであることを確認して保存
   - このスコープ名は `.env` の `ENTRA_REQUIRED_SCOPES` と一致させます (例: `ENTRA_REQUIRED_SCOPES=access_as_user`)。
 
-4. クライアントアプリからの利用
+5. クライアントアプリからの利用
   - フロントエンドや CLI アプリ側で、上記アプリケーション ID URI とスコープ (`access_as_user`) を指定してアクセストークンを取得します。
   - 例: Azure CLI からは、`$RESOURCE` をアプリケーション ID URI に設定し、`$RESOURCE/access_as_user` でログイン・トークン要求を行います。
 
@@ -116,7 +122,7 @@ copy .env.example .env  # Windows
 
 ```dotenv
 ENTRA_TENANT_ID=your-tenant-id-here          # テナント ID (GUID) - アプリ登録の「ディレクトリ (テナント) ID」
-ENTRA_AUDIENCE=your-client-or-api-id-here    # アプリ / API の Audience - Application ID URI
+ENTRA_AUDIENCE=your-client-or-api-id-here    # アプリ の クライアント ID
 ENTRA_REQUIRED_SCOPES=access_as_user         # 要求スコープ（カンマ区切りで複数指定可）- 作成したスコープ名
 LOG_LEVEL=INFO                               # ログレベル (DEBUG/INFO/WARN/ERROR)
 MCP_TRANSPORT=streamable-http                # トランスポート種別
