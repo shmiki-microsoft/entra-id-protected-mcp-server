@@ -11,7 +11,7 @@ from jose import jwt, JWTError, ExpiredSignatureError
 
 from fastmcp.server.auth import AuthProvider
 from fastmcp.server.auth.auth import AccessToken
-
+from starlette.authentication import AuthenticationError
 logger = logging.getLogger(__name__)
 
 class EntraIDAuthProvider(AuthProvider):
@@ -91,7 +91,9 @@ class EntraIDAuthProvider(AuthProvider):
                 if not required.issubset(present):
                     missing = list(required - present)
                     logger.warning("Missing required scopes: %s", ", ".join(missing))
-                    raise JWTError("Missing required scopes")
+                    raise AuthenticationError(
+                        "missing_required_scopes"
+                    )
 
             # FastMCP の `AccessToken` として返却 (クライアント ID は `azp`/`appid`)
             return AccessToken(
@@ -103,8 +105,8 @@ class EntraIDAuthProvider(AuthProvider):
 
         except ExpiredSignatureError as exc:
             logger.warning("Access token expired")
-            raise ValueError("access_token_expired") from exc
+            raise AuthenticationError("access_token_expired") from exc
 
-        except JWTError as exc:
-            logger.error("Invalid token: %s", str(exc))
-            raise ValueError(f"invalid_token: {str(exc)}") from exc
+        except JWTError as e:
+            logger.warning("Invalid access token: %s", e)
+            raise AuthenticationError("invalid_access_token") from e
