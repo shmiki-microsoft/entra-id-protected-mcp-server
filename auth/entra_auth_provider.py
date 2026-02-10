@@ -7,7 +7,7 @@ FastMCP が扱える `AccessToken` オブジェクトとして返却します。
 """
 import logging
 import requests
-from jose import jwt, JWTError, ExpiredSignatureError
+from jose import jwt, JWTError
 
 from fastmcp.server.auth import AuthProvider
 from fastmcp.server.auth.auth import AccessToken
@@ -102,11 +102,22 @@ class EntraIDAuthProvider(AuthProvider):
                 scopes=scopes,
                 client_id=claims.get("azp") or claims.get("appid"),
             )
-
-        except ExpiredSignatureError as exc:
-            logger.warning("Access token expired")
-            raise AuthenticationError("access_token_expired") from exc
-
         except JWTError as e:
+            msg = str(e).lower()
+            # 期限切れトークンもここに来る場合があるので、先に判定
+            if "expir" in msg or "expired" in msg:
+                logger.warning("Access token expired (JWTError): %s", e)
+                raise AuthenticationError("access_token_expired") from e
+
+            # issuer 不一致
+            if "issuer" in msg or "iss" in msg:
+                logger.warning("Invalid issuer: %s", e)
+                raise AuthenticationError("invalid_issuer") from e
+
+            # audience 不一致など JWT の検証エラーも AuthenticationError に変換
+            if "aud" in msg or "audience" in msg:
+                logger.warning("Invalid audience: %s", e)
+                raise AuthenticationError("invalid_audience") from e
+
             logger.warning("Invalid access token: %s", e)
             raise AuthenticationError("invalid_access_token") from e
