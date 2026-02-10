@@ -1,0 +1,24 @@
+{
+    // IntelliSense を使用して利用可能な属性を学べます。
+    // 既存の属性の説明をホバーして表示します。
+    // 詳細情報は次を確認してください: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "Run MCP Server",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env"
+        },
+{
+			"name": "Run MCP Inspector",
+			"type": "node-terminal",
+			"request": "launch",
+			"command": "npx @modelcontextprotocol/inspector",
+			"cwd": "${workspaceFolder}"
+		}
+    ]
+}
