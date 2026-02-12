@@ -195,7 +195,7 @@ az account get-access-token --resource $RESOURCE --query accessToken -o tsv
 
 ### 前提条件
 
-- Node.js（推奨: v18 以降）がインストールされていること
+- Node.js（推奨: v22.7.5 以降）がインストールされていること
 - MCP サーバーが起動済みであること
   - 例: 上記「Run MCP Server」構成で `localhost:8000` で待ち受け
 
