@@ -2,8 +2,9 @@
 
 Microsoft Entra ID (旧 Azure AD) のアクセストークン検証で保護された FastMCP サーバーです。
 
-認証済みユーザーのトークンからクレーム情報を取得する `get_user_info` ツールを 1 つ提供し、
-MCP クライアント（例: MCP 対応のエージェント / エディタ拡張）から安全にユーザー情報へアクセスできるようにします。
+認証済みユーザーのトークンからクレーム情報を取得する `get_user_info` ツールと、
+On-Behalf-Of (OBO) フロー経由で Azure Virtual Machines 一覧を取得する `list_azure_vms` ツールを提供し、
+MCP クライアント（例: MCP 対応のエージェント / エディタ拡張）から安全にユーザー情報や Azure リソース情報へアクセスできるようにします。
 
 ---
 
@@ -18,6 +19,9 @@ MCP クライアント（例: MCP 対応のエージェント / エディタ拡�
 - MCP ツール `get_user_info`
   - 認証済みユーザーのクレームをまとめて返す
   - 代表的な項目: `subject`, `tenant_id`, `user_principal_name`, `email`, `name`, `roles`, `scopes` など
+-. MCP ツール `list_azure_vms`
+  - 認証済みユーザーのアクセストークンを OBO フローで Azure Resource Manager 用トークンに交換
+  - 指定したサブスクリプション ID 内の Azure Virtual Machines 一覧を返す
 
 ---
 
@@ -32,9 +36,13 @@ MCP クライアント（例: MCP 対応のエージェント / エディタ拡�
   - スコープ文字列を整形する `parse_scopes`
 - `auth/entra_auth_provider.py`
   - Microsoft Entra ID のトークン検証を行う `EntraIDAuthProvider`
+- `auth/obo_client.py`
+  - ユーザー アクセストークンを使った On-Behalf-Of フローを実装する `OnBehalfOfCredential`
+  - Azure SDK (管理プレーン) から利用可能な `TokenCredential` 実装
 - `tools/`
   - MCP ツール用パッケージ。`__init__.py` の `register_all_tools(mcp)` が配下モジュールの `register_tools(mcp)` を自動的に呼び出す
   - `userinfo.py`: `get_user_info` ツールの実装
+  - `azure_vm.py`: Azure Virtual Machines 一覧を取得する `list_azure_vms` ツールの実装
 - `.env.example`
   - 必要な環境変数のサンプル
   
@@ -43,7 +51,7 @@ MCP クライアント（例: MCP 対応のエージェント / エディタ拡�
 
 ## 必要要件
 
-- Python 3.11 以降を推奨
+- Python 3.12 以降
 - Microsoft Entra ID (旧 Azure AD) テナント
   - API 用クライアント/アプリケーション登録
   - アクセストークンを発行できる環境（例: SPA / Web アプリ / CLI など）
@@ -71,7 +79,7 @@ MCP クライアント（例: MCP 対応のエージェント / エディタ拡�
   - 対象アプリの「Expose an API (API の公開)」に移動
   - 「Set」または「Application ID URI の設定」から、アプリケーション ID URI を設定
     - 例: `api://<アプリケーションID>` あるいは独自の URI
-  - 設定した値を `.env` の `ENTRA_AUDIENCE` および Azure CLI 例の `$RESOURCE` に使用します。
+  - 設定した値を `.env` の `ENTRA_APP_CLIENT_ID` および Azure CLI 例の `$RESOURCE` に使用します。
 
 4. スコープ (`access_as_user`) の作成
   - 同じく「Expose an API (API の公開)」→「Add a scope (スコープの追加)」
@@ -84,7 +92,7 @@ MCP クライアント（例: MCP 対応のエージェント / エディタ拡�
   - フロントエンドや CLI アプリ側で、上記アプリケーション ID URI とスコープ (`access_as_user`) を指定してアクセストークンを取得します。
   - 例: Azure CLI からは、`$RESOURCE` をアプリケーション ID URI に設定し、`$RESOURCE/access_as_user` でログイン・トークン要求を行います。
 
-これにより、MCP サーバー側では `ENTRA_TENANT_ID` / `ENTRA_AUDIENCE` / `ENTRA_REQUIRED_SCOPES` を使ってトークン検証を行い、`get_user_info` ツールからクレームを参照できるようになります。
+これにより、MCP サーバー側では `ENTRA_TENANT_ID` / `ENTRA_APP_CLIENT_ID` / `ENTRA_REQUIRED_SCOPES` を使ってトークン検証を行い、`get_user_info` ツールからクレームを参照できるようになります。
 
 ---
 
@@ -125,13 +133,19 @@ copy .env.example .env  # Windows
 
 ```dotenv
 ENTRA_TENANT_ID=your-tenant-id-here          # テナント ID (GUID) - アプリ登録の「ディレクトリ (テナント) ID」
-ENTRA_AUDIENCE=your-client-or-api-id-here    # アプリ の クライアント ID
+ENTRA_APP_CLIENT_ID=your-client-or-api-id-here    # アプリの クライアント ID (OBO の client_id にも利用)
 ENTRA_REQUIRED_SCOPES=access_as_user         # 要求スコープ（カンマ区切りで複数指定可）- 作成したスコープ名
-LOG_LEVEL=INFO                               # アプリ(このリポジトリのコード)および MCP サーバーのログレベル (DEBUG/INFO/WARN/ERROR)
-ENTRA_AUTH_LOG_LEVEL=INFO                    # auth/entra_auth_provider のログレベル (未指定なら LOG_LEVEL を使用)
+MCP_LOG_LEVEL=INFO                           # アプリ(このリポジトリのコード)および MCP サーバーのログレベル (DEBUG/INFO/WARN/ERROR)
+ENTRA_AUTH_LOG_LEVEL=INFO                    # auth/entra_auth_provider のログレベル (未指定なら MCP_LOG_LEVEL を使用)
+AZURE_SDK_LOG_LEVEL=INFO                     # Azure SDK (azure-mgmt-compute 等) のログレベル (未指定なら MCP_LOG_LEVEL を使用)
 MCP_TRANSPORT=streamable-http                # トランスポート種別
 MCP_HOST=localhost                           # バインドするホスト
 MCP_PORT=8000                                # 待受ポート
+
+# Azure OBO (Azure SDK から管理プレーン API を呼び出すための設定)
+ENTRA_APP_CLIENT_SECRET=your-mcp-api-client-secret-here
+# 既定は Azure Resource Manager 管理プレーン
+AZURE_OBO_SCOPE=https://management.azure.com/.default
 ```
 
 > ※ `.env` の読み込みは FastMCP / 実行環境側で行ってください。VS Code や MCP ランタイムで `.env` を読み込む設定が必要な場合があります。
@@ -240,7 +254,7 @@ Inspector 上から `get_user_info` ツールを呼び出すことで、実際�
 2. そのアクセストークンを `Authorization: Bearer <token>` として MCP サーバーに送信
 3. `auth/entra_auth_provider.py` の `EntraIDAuthProvider` が次を検証
    - 署名検証 (Entra の JWKS を取得して JOSE で検証)
-   - `audience` が `ENTRA_AUDIENCE` と一致しているか
+  - `audience` が `ENTRA_APP_CLIENT_ID` と一致しているか
    - `issuer` がテナントに対応した URL か
    - 必須スコープ (`ENTRA_REQUIRED_SCOPES`) をすべて満たしているか
 4. 検証成功時、FastMCP の `AccessToken` としてトークン情報をコンテキストに保存
@@ -271,6 +285,35 @@ Inspector 上から `get_user_info` ツールを呼び出すことで、実際�
 - そのほか `app_id`, `azp`, `idp`, `ver` など
 
 これにより、MCP クライアントは「誰が」「どの権限で」アクセスしているかを簡単に把握できます。
+
+---
+
+## 提供ツール: `list_azure_vms`
+
+`list_azure_vms` は、現在のリクエストで使用しているユーザー アクセストークンを On-Behalf-Of フローで交換し、
+Azure Resource Manager (`https://management.azure.com/`) に対して Azure SDK (`azure-mgmt-compute`) を用いて
+指定したサブスクリプション内の Virtual Machines 一覧を取得します。
+
+シグネチャ:
+
+```python
+async def list_azure_vms(subscription_id: str) -> list[dict[str, Any]]
+```
+
+主な動作:
+
+- FastMCP の `get_access_token()` から現在のユーザー アクセストークン (JWT) を取得
+- `auth.obo_client.OnBehalfOfCredential` を用いて OBO フローを実行
+  - OBO には次の設定値が必要です:
+    - `ENTRA_TENANT_ID`: テナント ID
+    - `ENTRA_APP_CLIENT_ID`: この MCP 用アプリ登録のクライアント ID
+    - `ENTRA_APP_CLIENT_SECRET`: 上記アプリ登録のクライアント シークレット
+    - `AZURE_OBO_SCOPE`: 要求するスコープ (既定: `https://management.azure.com/.default`)
+- `ComputeManagementClient` を使って VM 一覧を列挙
+  - 返却オブジェクトから `id`, `name`, `location`, `type`, `tags` を抜き出して返却
+
+これにより、MCP クライアントから Azure Portal に相当する VM 一覧情報をプログラム的に取得できます。
+OBO 用のクライアント シークレットやスコープは `.env` の `ENTRA_APP_CLIENT_SECRET` / `AZURE_OBO_SCOPE` で制御します。
 
 ---
 
@@ -305,7 +348,7 @@ ENTRA_REQUIRED_SCOPES=access_as_user, User.Read,  files.read
 - 必須スコープ不足
   - `missing_required_scopes` という `AuthenticationError`
 
-ログレベルは `LOG_LEVEL` で制御できます (デフォルト: `INFO`)。
+ログレベルは `MCP_LOG_LEVEL` / `ENTRA_AUTH_LOG_LEVEL` / `AZURE_SDK_LOG_LEVEL` で制御できます (いずれもデフォルト: `INFO`)。
 
 ---
 

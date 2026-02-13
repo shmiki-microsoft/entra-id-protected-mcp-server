@@ -2,3 +2,5 @@ fastmcp
 python-jose
 cryptography 
 requests
+msal
+azure-mgmt-compute
