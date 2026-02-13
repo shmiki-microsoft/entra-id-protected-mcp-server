@@ -176,6 +176,24 @@ az account get-access-token --resource $RESOURCE --query accessToken -o tsv
 1. 事前準備
   - `.env` を作成し、必要な値を設定しておきます
   - `uv sync` 済みであること
+  - VS Code の Python 拡張機能をインストールしておきます
+
+  - VS Code でコマンドパレット（Ctrl + Shift + P または Cmd + Shift + P）を開き、「Python: Select Interpreter」を入力・選択します。
+
+  - リストの中に、先ほど作成した `.venv` 内の Python が表示されているはずです。
+
+    例: `Python 3.x.x ('.venv': venv) ./venv/bin/python`
+
+  - これを選択することで、VS Code のエディタやターミナルが uv の仮想環境を使用するようになります。
+
+  - ※ `.venv` が表示されない場合は、VS Code の設定 (`settings.json`) に以下を追記して、`.venv` を検索対象に含めてください。
+
+    ```json
+    {
+      "python.venvPath": ".",
+      "python.venvFolders": [".venv"]
+    }
+    ```
 2. VS Code でこのフォルダーを開く
 3. 実行とデバッグビューで「Run MCP Server」を選択
 4. F5 または「デバッグの開始」で起動
