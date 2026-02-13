@@ -124,7 +124,8 @@ copy .env.example .env  # Windows
 ENTRA_TENANT_ID=your-tenant-id-here          # テナント ID (GUID) - アプリ登録の「ディレクトリ (テナント) ID」
 ENTRA_AUDIENCE=your-client-or-api-id-here    # アプリ の クライアント ID
 ENTRA_REQUIRED_SCOPES=access_as_user         # 要求スコープ（カンマ区切りで複数指定可）- 作成したスコープ名
-LOG_LEVEL=INFO                               # ログレベル (DEBUG/INFO/WARN/ERROR)
+LOG_LEVEL=INFO                               # アプリ(このリポジトリのコード)および MCP サーバーのログレベル (DEBUG/INFO/WARN/ERROR)
+ENTRA_AUTH_LOG_LEVEL=INFO                    # auth/entra_auth_provider のログレベル (未指定なら LOG_LEVEL を使用)
 MCP_TRANSPORT=streamable-http                # トランスポート種別
 MCP_HOST=localhost                           # バインドするホスト
 MCP_PORT=8000                                # 待受ポート

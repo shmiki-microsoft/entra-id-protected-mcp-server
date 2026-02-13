@@ -17,6 +17,7 @@ class Settings:
 
     # ログ
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
+    entra_auth_log_level: str = os.getenv("ENTRA_AUTH_LOG_LEVEL", "")
 
     # MCP 起動設定
     mcp_transport: str = os.getenv("MCP_TRANSPORT", "streamable-http")

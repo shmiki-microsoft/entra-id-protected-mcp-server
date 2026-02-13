@@ -20,12 +20,24 @@ from utils import parse_scopes
 
 # 設定の読み込み
 settings = Settings()
-LOG_LEVEL = settings.log_level.upper()
+
+# アプリ(このリポジトリのコード)用のログレベル (MCP サーバーも同一レベルを使用)
+APP_LOG_LEVEL = (settings.log_level or "INFO").upper()
+
+# Entra 認証プロバイダ用のログレベル (未指定ならアプリと同じ)
+ENTRA_AUTH_LOG_LEVEL = (
+    settings.entra_auth_log_level or settings.log_level or "INFO"
+).upper()
+
 logging.basicConfig(
-    level=LOG_LEVEL,
+    level=APP_LOG_LEVEL,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# 認証プロバイダのロガーに専用レベルを適用
+logging.getLogger("auth.entra_auth_provider").setLevel(ENTRA_AUTH_LOG_LEVEL)
+
 # Entra ID 設定 (必須)。`.env` または環境変数から読み込みます。
 tenant_id = settings.entra_tenant_id
 audience = settings.entra_audience
@@ -104,5 +116,5 @@ if __name__ == "__main__":
         transport=settings.mcp_transport,
         host=settings.mcp_host,
         port=settings.mcp_port,
-        log_level=LOG_LEVEL,
+        log_level=APP_LOG_LEVEL,
     )
