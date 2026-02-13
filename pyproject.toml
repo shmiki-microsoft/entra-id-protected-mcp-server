@@ -1,0 +1,12 @@
+[project]
+name = "entra-id-protected-mcp-server"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "cryptography>=46.0.5",
+    "fastmcp>=2.14.5",
+    "python-jose>=3.5.0",
+    "requests>=2.32.5",
+]

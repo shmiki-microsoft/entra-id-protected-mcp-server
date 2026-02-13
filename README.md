@@ -34,8 +34,7 @@ MCP クライアント（例: MCP 対応のエージェント / エディタ拡�
   - Microsoft Entra ID のトークン検証を行う `EntraIDAuthProvider`
 - `.env.example`
   - 必要な環境変数のサンプル
-- `requirements.txt`
-  - 依存パッケージ定義
+  
 
 ---
 
@@ -95,18 +94,19 @@ git clone <this-repo-url>
 cd entra-id-protected-mcp-server
 ```
 
-2. 仮想環境の作成と有効化 (任意)
+2. 依存パッケージのインストール (uv 利用)
+
+このプロジェクトは Python パッケージ管理に [uv](https://github.com/astral-sh/uv) を利用します。
 
 ```bash
-python -m venv .venv
-.venv\\Scripts\\activate  # Windows PowerShell
+# まだ uv が入っていない場合
+pip install uv  # または公式ドキュメントに従ってインストール
+
+# プロジェクト依存関係のインストール
+uv sync
 ```
 
-3. 依存パッケージのインストール
-
-```bash
-pip install -r requirements.txt
-```
+> 補足: `uv` は内部で仮想環境も自動管理します。明示的に `python -m venv` で環境を作る必要はありません。
 
 4. 環境変数の設定
 
@@ -135,10 +135,10 @@ MCP_PORT=8000                                # 待受ポート
 ---
 ## 実行方法
 
-ローカルで MCP サーバーを HTTP 経由で起動する場合:
+uv 経由で MCP サーバーを HTTP 経由で起動する場合:
 
 ```bash
-python main.py
+uv run python main.py
 ```
 
 デフォルトでは以下で待ち受けます:
@@ -174,7 +174,7 @@ az account get-access-token --resource $RESOURCE --query accessToken -o tsv
 
 1. 事前準備
   - `.env` を作成し、必要な値を設定しておきます
-  - `pip install -r requirements.txt` 済みであること
+  - `uv sync` 済みであること
 2. VS Code でこのフォルダーを開く
 3. 実行とデバッグビューで「Run MCP Server」を選択
 4. F5 または「デバッグの開始」で起動
