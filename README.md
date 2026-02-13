@@ -19,7 +19,7 @@ MCP クライアント（例: MCP 対応のエージェント / エディタ拡�
 - MCP ツール `get_user_info`
   - 認証済みユーザーのクレームをまとめて返す
   - 代表的な項目: `subject`, `tenant_id`, `user_principal_name`, `email`, `name`, `roles`, `scopes` など
--. MCP ツール `list_azure_vms`
+- MCP ツール `list_azure_vms`
   - 認証済みユーザーのアクセストークンを OBO フローで Azure Resource Manager 用トークンに交換
   - 指定したサブスクリプション ID 内の Azure Virtual Machines 一覧を返す
 
