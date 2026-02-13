@@ -25,13 +25,16 @@ MCP クライアント（例: MCP 対応のエージェント / エディタ拡�
 
 - `main.py`
   - エントリーポイント。`Settings` と `EntraIDAuthProvider` を使って FastMCP サーバーを起動
-  - MCP ツール `get_user_info` の実装
+  - tools パッケージから MCP ツールを登録
 - `config.py`
   - 環境変数を読み込む設定クラス `Settings`
 - `utils.py`
   - スコープ文字列を整形する `parse_scopes`
 - `auth/entra_auth_provider.py`
   - Microsoft Entra ID のトークン検証を行う `EntraIDAuthProvider`
+- `tools/`
+  - MCP ツール用パッケージ。`__init__.py` の `register_all_tools(mcp)` が配下モジュールの `register_tools(mcp)` を自動的に呼び出す
+  - `userinfo.py`: `get_user_info` ツールの実装
 - `.env.example`
   - 必要な環境変数のサンプル
   
@@ -310,8 +313,37 @@ ENTRA_REQUIRED_SCOPES=access_as_user, User.Read,  files.read
 
 - 認証方式や返却クレームを拡張したい場合は:
   - 認証ロジック: `auth/entra_auth_provider.py`
-  - 戻り値の形式: `main.py` の `get_user_info` 関数
+  - 戻り値の形式: `tools/userinfo.py` の `get_user_info` 関数
 - 追加 MCP ツールを増やしたい場合は:
-  - `main.py` 内で `@mcp.tool()` デコレータを付けた関数を追加してください。
+  - `tools/` 配下に新しいモジュールを追加し、その中で `register_tools(mcp: FastMCP) -> None` を実装して `@mcp.tool()` デコレータ付きの関数を登録してください。
+
+### MCP ツール追加例
+
+新しいツールを追加する最小構成の例です。
+
+1. `tools/hello.py` を作成
+
+```python
+from fastmcp import FastMCP
+
+
+def register_tools(mcp: FastMCP) -> None:
+    """Hello 系ツールを登録する。"""
+
+    @mcp.tool()
+    async def say_hello(name: str = "world") -> str:
+        """挨拶メッセージを返すサンプルツール。"""
+
+        return f"Hello, {name}!"
+```
+
+2. 何も変更せずにサーバーを再起動
+
+- `main.py` では既に `register_all_tools(mcp)` が呼ばれているため、
+  `tools/hello.py` の `register_tools` が自動的に実行され、`say_hello` ツールが登録されます。
+
+3. MCP Inspector やクライアントから `say_hello` ツールを呼び出す
+
+- 引数 `name` を指定して呼び出すと、`"Hello, <name>!"` 形式の文字列が返ります。
 
 ---

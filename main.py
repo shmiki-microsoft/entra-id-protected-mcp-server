@@ -1,5 +1,4 @@
-"""
-Entra ID 認証で保護された FastMCP サーバーのエントリーポイント。
+"""Entra ID 認証で保護された FastMCP サーバーのエントリーポイント。
 
 このサーバーは、Microsoft Entra ID (旧 Azure AD) のトークンを検証する
 `EntraIDAuthProvider` を通して保護されます。必要な環境変数:
@@ -8,14 +7,13 @@ Entra ID 認証で保護された FastMCP サーバーのエントリーポイ�
 - ENTRA_AUDIENCE: 受信者 (API / クライアント ID)
 - ENTRA_REQUIRED_SCOPES: 要求するスコープ (カンマ区切り、任意)
 
-提供するツール `get_user_info` は、認証済みユーザーのトークンから
-主要なクレーム情報を返します。
+MCP ツール定義は tools パッケージ配下の各モジュールに分離されています。
 """
 import logging
 from fastmcp import FastMCP
-from fastmcp.server.dependencies import get_access_token
 from auth.entra_auth_provider import EntraIDAuthProvider
 from config import Settings
+from tools import register_all_tools
 from utils import parse_scopes
 
 # 設定の読み込み
@@ -64,51 +62,8 @@ auth_provider = EntraIDAuthProvider(
 # FastMCP サーバーを作成 (MCP ツール定義はこのインスタンスに紐付く)
 mcp = FastMCP("entra-protected-mcp-server", auth=auth_provider)
 
-# ===== Tool =====
-@mcp.tool()
-async def get_user_info():
-    """認証済みの Azure (Entra ID) ユーザー情報を返します。
-
-    現在リクエストのコンテキストにあるアクセストークンからクレームを取得し、
-    主な識別子・プロフィール・ロール・スコープなどをまとめて返します。
-    """
-    # FastMCP 依存性から現在のアクセストークンを取得
-    token = get_access_token()
-    # JWT のクレーム (tid, sub, upn など) を参照
-    claims = token.claims
-    logger.debug(
-        "get_user_info invoked: tenant_id=%s subject=%s client_id=%s",
-        claims.get("tid"),
-        claims.get("sub"),
-        token.client_id,
-    )
-    # 代表的なクレームをそのまま返却 (存在しない場合は None)
-    return {
-        "subject": claims.get("sub"),
-        "client_id": token.client_id,
-        "tenant_id": claims.get("tid"),
-        "issuer": claims.get("iss"),
-        "object_id": claims.get("oid"),
-        "user_principal_name": claims.get("upn"),
-        "email": claims.get("email") or claims.get("preferred_username"),
-        "name": claims.get("name"),
-        "given_name": claims.get("given_name"),
-        "family_name": claims.get("family_name"),
-        "job_title": claims.get("job_title"),
-        "department": claims.get("department"),
-        "office_location": claims.get("office_location"),
-        "scopes": token.scopes,
-        "roles": claims.get("roles", []),
-        "amr": claims.get("amr"),
-        "auth_methods": claims.get("amr"),
-        "issued_at": claims.get("iat"),
-        "expires_at": claims.get("exp"),
-        "not_before": claims.get("nbf"),
-        "app_id": claims.get("appid"),
-        "azp": claims.get("azp"),
-        "idp": claims.get("idp"),
-        "ver": claims.get("ver"),
-    }
+# tools パッケージ配下のツールを一括登録
+register_all_tools(mcp)
 
 if __name__ == "__main__":
     # HTTP トランスポートで起動。localhost:8000 で待機します。
