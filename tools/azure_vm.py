@@ -1,4 +1,5 @@
 """Azure Virtual Machines 一覧取得用 MCP ツール。"""
+
 from __future__ import annotations
 
 import logging
@@ -8,28 +9,12 @@ from azure.mgmt.compute import ComputeManagementClient
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_access_token
 
-from auth.obo_client import OboSettings, OnBehalfOfCredential
+from auth.entra_auth_provider import build_obo_credential
 from config import Settings
 
 logger = logging.getLogger(__name__)
 
 _settings = Settings()
-
-
-def _build_obo_credential(user_jwt: str) -> OnBehalfOfCredential:
-    """現在のユーザー トークンを元に OBO 用の Credential を構築する。"""
-    if not _settings.entra_tenant_id:
-        raise RuntimeError("ENTRA_TENANT_ID is not configured")
-    if not _settings.entra_app_client_id or not _settings.entra_app_client_secret:
-        raise RuntimeError("ENTRA_APP_CLIENT_ID / ENTRA_APP_CLIENT_SECRET are not configured")
-
-    obo_settings = OboSettings(
-        tenant_id=_settings.entra_tenant_id,
-        client_id=_settings.entra_app_client_id,
-        client_secret=_settings.entra_app_client_secret,
-        scope=_settings.azure_obo_scope,
-    )
-    return OnBehalfOfCredential(obo_settings, user_jwt)
 
 
 def register_tools(mcp: FastMCP) -> None:
@@ -49,7 +34,9 @@ def register_tools(mcp: FastMCP) -> None:
 
         # FastMCP から現在のユーザー アクセストークンを取得
         access_token = get_access_token()
-        credential = _build_obo_credential(access_token.token)
+        credential = build_obo_credential(
+            access_token.token, "https://management.azure.com/.default"
+        )
 
         # AZURE_SDK_LOG_LEVEL が DEBUG の場合のみ、HTTP ログを詳細に出す
         azure_sdk_level = (

@@ -12,7 +12,36 @@ from jose import jwt, JWTError
 from fastmcp.server.auth import AuthProvider
 from fastmcp.server.auth.auth import AccessToken
 from starlette.authentication import AuthenticationError
+
+from auth.obo_client import OboSettings, OnBehalfOfCredential
+from config import Settings
+
 logger = logging.getLogger(__name__)
+
+
+def build_obo_credential(user_jwt: str, scope: str) -> OnBehalfOfCredential:
+    """現在のユーザー トークンを元に OBO 用の Credential を構築する。
+    
+    :param user_jwt: ユーザーの JWT アクセストークン
+    :param scope: OBO 交換に使用するスコープ (例: "https://graph.microsoft.com/.default")
+    :return: OnBehalfOfCredential インスタンス
+    """
+    settings = Settings()
+
+    if not settings.entra_tenant_id:
+        raise RuntimeError("ENTRA_TENANT_ID is not configured")
+    if not settings.entra_app_client_id or not settings.entra_app_client_secret:
+        raise RuntimeError(
+            "ENTRA_APP_CLIENT_ID / ENTRA_APP_CLIENT_SECRET are not configured"
+        )
+
+    obo_settings = OboSettings(
+        tenant_id=settings.entra_tenant_id,
+        client_id=settings.entra_app_client_id,
+        client_secret=settings.entra_app_client_secret,
+        scope=scope,
+    )
+    return OnBehalfOfCredential(obo_settings, user_jwt)
 
 class EntraIDAuthProvider(AuthProvider):
     """Entra ID ベースのトークン検証を行う認証プロバイダ。

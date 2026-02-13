@@ -4,3 +4,4 @@ cryptography
 requests
 msal
 azure-mgmt-compute
+msgraph-sdk

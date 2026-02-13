@@ -2,8 +2,9 @@
 
 Microsoft Entra ID (旧 Azure AD) のアクセストークン検証で保護された FastMCP サーバーです。
 
-認証済みユーザーのトークンからクレーム情報を取得する `get_user_info` ツールと、
-On-Behalf-Of (OBO) フロー経由で Azure Virtual Machines 一覧を取得する `list_azure_vms` ツールを提供し、
+認証済みユーザーのトークンからクレーム情報を取得する `get_user_info` ツール、
+On-Behalf-Of (OBO) フロー経由で Azure Virtual Machines 一覧を取得する `list_azure_vms` ツール、
+Microsoft Graph API を使用してユーザープロフィールを取得する `get_graph_me` および `get_graph_me_with_select_query` ツールを提供し、
 MCP クライアント（例: MCP 対応のエージェント / エディタ拡張）から安全にユーザー情報や Azure リソース情報へアクセスできるようにします。
 
 ---
@@ -22,6 +23,12 @@ MCP クライアント（例: MCP 対応のエージェント / エディタ拡�
 - MCP ツール `list_azure_vms`
   - 認証済みユーザーのアクセストークンを OBO フローで Azure Resource Manager 用トークンに交換
   - 指定したサブスクリプション ID 内の Azure Virtual Machines 一覧を返す
+- MCP ツール `get_graph_me`
+  - Microsoft Graph API を使用して認証済みユーザーの完全なプロフィール情報を取得
+  - OBO フローで Graph API 用トークンに交換してアクセス
+- MCP ツール `get_graph_me_with_select_query`
+  - Microsoft Graph API の $select クエリを使用して必要なフィールドのみを取得
+  - ネットワーク効率と応答速度を最適化
 
 ---
 
@@ -36,6 +43,7 @@ MCP クライアント（例: MCP 対応のエージェント / エディタ拡�
   - スコープ文字列を整形する `parse_scopes`
 - `auth/entra_auth_provider.py`
   - Microsoft Entra ID のトークン検証を行う `EntraIDAuthProvider`
+  - OBO Credential を構築する共通関数 `build_obo_credential` を提供
 - `auth/obo_client.py`
   - ユーザー アクセストークンを使った On-Behalf-Of フローを実装する `OnBehalfOfCredential`
   - Azure SDK (管理プレーン) から利用可能な `TokenCredential` 実装
@@ -43,6 +51,7 @@ MCP クライアント（例: MCP 対応のエージェント / エディタ拡�
   - MCP ツール用パッケージ。`__init__.py` の `register_all_tools(mcp)` が配下モジュールの `register_tools(mcp)` を自動的に呼び出す
   - `userinfo.py`: `get_user_info` ツールの実装
   - `azure_vm.py`: Azure Virtual Machines 一覧を取得する `list_azure_vms` ツールの実装
+  - `graph_user.py`: Microsoft Graph API を使用してユーザープロフィールを取得する `get_graph_me` および `get_graph_me_with_select_query` ツールの実装
 - `.env.example`
   - 必要な環境変数のサンプル
   
@@ -138,14 +147,13 @@ ENTRA_REQUIRED_SCOPES=access_as_user         # 要求スコープ（カンマ区
 MCP_LOG_LEVEL=INFO                           # アプリ(このリポジトリのコード)および MCP サーバーのログレベル (DEBUG/INFO/WARN/ERROR)
 ENTRA_AUTH_LOG_LEVEL=INFO                    # auth/entra_auth_provider のログレベル (未指定なら MCP_LOG_LEVEL を使用)
 AZURE_SDK_LOG_LEVEL=INFO                     # Azure SDK (azure-mgmt-compute 等) のログレベル (未指定なら MCP_LOG_LEVEL を使用)
+GRAPH_SDK_LOG_LEVEL=INFO                     # Microsoft Graph SDK のログレベル (未指定なら MCP_LOG_LEVEL を使用)
 MCP_TRANSPORT=streamable-http                # トランスポート種別
 MCP_HOST=localhost                           # バインドするホスト
 MCP_PORT=8000                                # 待受ポート
 
 # Azure OBO (Azure SDK から管理プレーン API を呼び出すための設定)
 ENTRA_APP_CLIENT_SECRET=your-mcp-api-client-secret-here
-# 既定は Azure Resource Manager 管理プレーン
-AZURE_OBO_SCOPE=https://management.azure.com/.default
 ```
 
 > ※ `.env` の読み込みは FastMCP / 実行環境側で行ってください。VS Code や MCP ランタイムで `.env` を読み込む設定が必要な場合があります。
@@ -308,12 +316,69 @@ async def list_azure_vms(subscription_id: str) -> list[dict[str, Any]]
     - `ENTRA_TENANT_ID`: テナント ID
     - `ENTRA_APP_CLIENT_ID`: この MCP 用アプリ登録のクライアント ID
     - `ENTRA_APP_CLIENT_SECRET`: 上記アプリ登録のクライアント シークレット
-    - `AZURE_OBO_SCOPE`: 要求するスコープ (既定: `https://management.azure.com/.default`)
 - `ComputeManagementClient` を使って VM 一覧を列挙
   - 返却オブジェクトから `id`, `name`, `location`, `type`, `tags` を抜き出して返却
 
 これにより、MCP クライアントから Azure Portal に相当する VM 一覧情報をプログラム的に取得できます。
-OBO 用のクライアント シークレットやスコープは `.env` の `ENTRA_APP_CLIENT_SECRET` / `AZURE_OBO_SCOPE` で制御します。
+OBO 用のクライアント シークレットは `.env` の `ENTRA_APP_CLIENT_SECRET` で設定します。
+
+---
+
+## 提供ツール: `get_graph_me`
+
+`get_graph_me` は、Microsoft Graph API (`https://graph.microsoft.com/v1.0/me`) を使用して、
+認証済みユーザーの完全なプロフィール情報を取得します。
+
+主な動作:
+
+- FastMCP の `get_access_token()` から現在のユーザー アクセストークン (JWT) を取得
+- `auth.entra_auth_provider.build_obo_credential` を用いて OBO フローを実行
+  - スコープ: `https://graph.microsoft.com/.default`
+- Microsoft Graph SDK (`msgraph`) を使ってユーザープロフィールを取得
+- Kiota モデルを JSON 形式にシリアライズして返却
+
+返却されるフィールド例:
+
+- `id`: ユーザーの一意識別子
+- `displayName`, `givenName`, `surname`: 表示名、名、姓
+- `mail`, `userPrincipalName`: メールアドレス、UPN
+- `jobTitle`, `department`, `officeLocation`: 役職、部署、オフィス所在地
+- その他 Microsoft Graph User リソースの全フィールド
+
+---
+
+## 提供ツール: `get_graph_me_with_select_query`
+
+`get_graph_me_with_select_query` は、`$select` クエリパラメータを使用して、
+必要なフィールドのみを指定してユーザープロフィール情報を取得します。
+
+シグネチャ:
+
+```python
+async def get_graph_me_with_select_query(
+    select: str = "displayName,mail,id,officeLocation,jobTitle"
+) -> dict[str, Any]
+```
+
+引数:
+
+- `select`: カンマ区切りで取得したいフィールドを指定（デフォルト: `"displayName,mail,id,officeLocation,jobTitle"`）
+
+主な利点:
+
+- 必要なフィールドのみを取得することで、ネットワーク転送量を削減
+- 応答時間の短縮
+- 特定の情報だけが必要な場合に最適
+
+例:
+
+```python
+# 名前とメールアドレスのみを取得
+result = await get_graph_me_with_select_query(select="displayName,mail")
+
+# ID、役職、部署のみを取得
+result = await get_graph_me_with_select_query(select="id,jobTitle,department")
+```
 
 ---
 

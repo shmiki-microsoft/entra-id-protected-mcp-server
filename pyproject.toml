@@ -11,4 +11,5 @@ dependencies = [
     "requests>=2.32.5",
     "msal>=1.28.0",
     "azure-mgmt-compute>=33.0.0",
+    "msgraph-sdk>=1.54.0",
 ]

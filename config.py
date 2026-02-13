@@ -20,6 +20,7 @@ class Settings:
     mcp_log_level: str = os.getenv("MCP_LOG_LEVEL", "INFO")
     entra_auth_log_level: str = os.getenv("ENTRA_AUTH_LOG_LEVEL", "")
     azure_sdk_log_level: str = os.getenv("AZURE_SDK_LOG_LEVEL", "")
+    graph_sdk_log_level: str = os.getenv("GRAPH_SDK_LOG_LEVEL", "")
 
     # MCP 起動設定
     mcp_transport: str = os.getenv("MCP_TRANSPORT", "streamable-http")
