@@ -7,14 +7,11 @@ from typing import Any, Dict, List
 
 from azure.mgmt.compute import ComputeManagementClient
 from fastmcp import FastMCP
-from fastmcp.server.dependencies import get_access_token
 
+from auth.claims_helpers import get_access_token_and_context
 from auth.entra_auth_provider import build_obo_credential
-from common.config import Settings
 
 logger = logging.getLogger(__name__)
-
-_settings = Settings()
 
 
 def register_tools(mcp: FastMCP) -> None:
@@ -32,18 +29,29 @@ def register_tools(mcp: FastMCP) -> None:
             subscription_id: VM を列挙する対象のサブスクリプション ID。
         """
 
-        # FastMCP から現在のユーザー アクセストークンを取得
-        access_token = get_access_token()
+        # 現在のユーザーアクセストークンとコンテキストを取得
+        access_token, roles, user_id, client_id, scopes, _ = (
+            get_access_token_and_context()
+        )
+
+        logger.debug(
+            "list_azure_vms invoked: subscription=%s user=%s client=%s roles=%s scopes=%s",
+            subscription_id,
+            user_id,
+            client_id,
+            roles,
+            scopes,
+        )
+
         credential = build_obo_credential(
             access_token.token, "https://management.azure.com/.default"
         )
 
-        # AZURE_SDK_LOG_LEVEL が DEBUG の場合のみ、HTTP ログを詳細に出す
-        azure_sdk_level = (
-            _settings.azure_sdk_log_level or _settings.mcp_log_level or "INFO"
-        ).upper()
+        # Azure SDK ロガーが DEBUG レベルの場合のみ、HTTP ログを詳細に出す
+        azure_logger = logging.getLogger("azure")
+        enable_logging = azure_logger.isEnabledFor(logging.DEBUG)
 
-        if azure_sdk_level == "DEBUG":
+        if enable_logging:
             client = ComputeManagementClient(
                 credential,
                 subscription_id,
@@ -65,5 +73,10 @@ def register_tools(mcp: FastMCP) -> None:
                 }
             )
 
-        logger.info("Fetched %d VMs from subscription %s", len(vms), subscription_id)
+        logger.info(
+            "Fetched %d VMs from subscription %s for user %s",
+            len(vms),
+            subscription_id,
+            user_id,
+        )
         return vms

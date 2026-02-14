@@ -8,33 +8,14 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from fastmcp import FastMCP
-from fastmcp.server.dependencies import get_access_token
 from starlette.authentication import AuthenticationError
 
+from auth.claims_helpers import get_user_context, has_role
+
 logger = logging.getLogger(__name__)
-
-
-def _has_role(roles: List[str], required_role: str) -> bool:
-    """ユーザーが指定されたロールを持っているか確認する。
-
-    :param roles: ユーザーが持つロールのリスト
-    :param required_role: 要求されるロール
-    :return: ロールを持っている場合は True
-    """
-    return required_role in roles
-
-
-def _get_user_context() -> tuple[List[str], str | None, str | None, dict]:
-    """現在のアクセストークンからユーザー関連情報をまとめて取得する。"""
-    access_token = get_access_token()
-    claims = access_token.claims
-    roles: List[str] = claims.get("roles", [])
-    user_id = claims.get("sub")
-    client_id = access_token.client_id
-    return roles, user_id, client_id, claims
 
 
 def register_tools(mcp: FastMCP) -> None:
@@ -54,13 +35,14 @@ def register_tools(mcp: FastMCP) -> None:
         - 監査情報: 従業員数、年間売上、監査レポートなど
         - 機密情報: 未公開プロジェクト、財務詳細、経営戦略など
         """
-        roles, user_id, client_id, claims = _get_user_context()
+        roles, user_id, client_id, scopes, _ = get_user_context()
 
         logger.debug(
-            "get_company_info invoked: user=%s client=%s roles=%s",
+            "get_company_info invoked: user=%s client=%s roles=%s scopes=%s",
             user_id,
             client_id,
             roles,
+            scopes,
         )
 
         # 基本的な公開情報 (すべてのユーザーに提供)
@@ -89,7 +71,7 @@ def register_tools(mcp: FastMCP) -> None:
             }
 
         # Auditor ロールがある場合は、監査情報を追加
-        if _has_role(roles, "Auditor") or _has_role(roles, "Admin"):
+        if has_role(roles, "Auditor") or has_role(roles, "Admin"):
             result["access_level"] = "auditor"
             result["audit_info"] = {
                 "employee_count": 2847,
@@ -113,7 +95,7 @@ def register_tools(mcp: FastMCP) -> None:
             }
 
         # Admin ロールがある場合は、機密情報を追加
-        if _has_role(roles, "Admin"):
+        if has_role(roles, "Admin"):
             result["access_level"] = "admin"
             result["confidential_info"] = {
                 "unreleased_projects": [
@@ -177,17 +159,18 @@ def register_tools(mcp: FastMCP) -> None:
         機密データのサンプルを返します。実際の使用では、データベースや
         外部 API から取得したデータを返すことができます。
         """
-        roles, user_id, _, _ = _get_user_context()
+        roles, user_id, _, scopes, _ = get_user_context()
         required_role = "Admin"
 
         logger.debug(
-            "get_sensitive_data invoked: user=%s user_roles=%s",
+            "get_sensitive_data invoked: user=%s user_roles=%s scopes=%s",
             user_id,
             roles,
+            scopes,
         )
 
         # Admin ロールを持っているか確認
-        if not _has_role(roles, required_role):
+        if not has_role(roles, required_role):
             logger.warning(
                 "Access denied: user %s with roles %s tried to access Admin-only data",
                 user_id,
@@ -235,13 +218,14 @@ def register_tools(mcp: FastMCP) -> None:
         リソースとアクションをリストアップします。これにより、ユーザーは
         自分がアクセスできる情報を事前に把握できます。
         """
-        roles, user_id, _, claims = _get_user_context()
+        roles, user_id, _, scopes, claims = get_user_context()
         user_name = claims.get("name") or claims.get("upn")
 
         logger.debug(
-            "list_available_resources invoked: user=%s roles=%s",
+            "list_available_resources invoked: user=%s roles=%s scopes=%s",
             user_id,
             roles,
+            scopes,
         )
 
         # すべてのユーザーがアクセスできる基本リソース
@@ -275,7 +259,7 @@ def register_tools(mcp: FastMCP) -> None:
             )
 
         # Auditor ロールを持つ場合
-        if _has_role(roles, "Auditor"):
+        if has_role(roles, "Auditor"):
             available_resources["accessible_resources"].extend(
                 [
                     {
@@ -288,7 +272,7 @@ def register_tools(mcp: FastMCP) -> None:
             )
 
         # Admin ロールを持つ場合
-        if _has_role(roles, "Admin"):
+        if has_role(roles, "Admin"):
             available_resources["accessible_resources"].extend(
                 [
                     {

@@ -16,13 +16,13 @@ import logging
 from typing import Any, Dict
 
 from fastmcp import FastMCP
-from fastmcp.server.dependencies import get_access_token
+from kiota_abstractions.base_request_configuration import RequestConfiguration
 from msgraph import GraphServiceClient
 from msgraph.generated.users.item.user_item_request_builder import (
     UserItemRequestBuilder,
 )
-from kiota_abstractions.base_request_configuration import RequestConfiguration
 
+from auth.claims_helpers import get_access_token_and_context
 from auth.entra_auth_provider import build_obo_credential
 from common.utils import graph_serialize_model
 
@@ -36,12 +36,16 @@ def register_tools(mcp: FastMCP) -> None:
     async def get_graph_me() -> Dict[str, Any]:
         """認証済みユーザーのプロフィール情報を取得します。"""
         try:
-            access_token = get_access_token()
+            access_token, roles, user_id, client_id, scopes, _ = (
+                get_access_token_and_context()
+            )
 
             logger.debug(
-                "get_graph_me invoked: subject=%s client_id=%s",
-                access_token.claims.get("sub"),
-                access_token.client_id,
+                "get_graph_me invoked: subject=%s client_id=%s roles=%s scopes=%s",
+                user_id,
+                client_id,
+                roles,
+                scopes,
             )
 
             credential = build_obo_credential(
@@ -72,12 +76,18 @@ def register_tools(mcp: FastMCP) -> None:
     ) -> Dict[str, Any]:
         """指定フィールドでユーザープロフィールを取得します。"""
         try:
-            access_token = get_access_token()
+            access_token, roles, user_id, client_id, scopes, _ = (
+                get_access_token_and_context()
+            )
 
             logger.debug(
-                "get_graph_me_with_select_query invoked: select=%s subject=%s",
+                "get_graph_me_with_select_query invoked: select=%s subject=%s "
+                "client_id=%s roles=%s scopes=%s",
                 select,
-                access_token.claims.get("sub"),
+                user_id,
+                client_id,
+                roles,
+                scopes,
             )
 
             credential = build_obo_credential(
@@ -101,9 +111,7 @@ def register_tools(mcp: FastMCP) -> None:
                 query_parameters=query_params,
             )
 
-            response = await client.me.get(
-                request_configuration=request_configuration
-            )
+            response = await client.me.get(request_configuration=request_configuration)
 
             data = graph_serialize_model(response)
 

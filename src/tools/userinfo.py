@@ -1,9 +1,12 @@
 """ユーザー情報関連の MCP ツール群。"""
+
 from __future__ import annotations
 
 import logging
+
 from fastmcp import FastMCP
-from fastmcp.server.dependencies import get_access_token
+
+from auth.claims_helpers import get_user_context
 
 logger = logging.getLogger(__name__)
 
@@ -18,20 +21,21 @@ def register_tools(mcp: FastMCP) -> None:
         現在リクエストのコンテキストにあるアクセストークンからクレームを取得し、
         主な識別子・プロフィール・ロール・スコープなどをまとめて返します。
         """
-        # FastMCP 依存性から現在のアクセストークンを取得
-        token = get_access_token()
-        # JWT のクレーム (tid, sub, upn など) を参照
-        claims = token.claims
+        # 現在のアクセストークンとユーザーコンテキストを取得
+        roles, user_id, client_id, scopes, claims = get_user_context()
+
         logger.debug(
-            "get_user_info invoked: tenant_id=%s subject=%s client_id=%s",
+            "get_user_info invoked: tenant_id=%s subject=%s client_id=%s roles=%s scopes=%s",
             claims.get("tid"),
-            claims.get("sub"),
-            token.client_id,
+            user_id,
+            client_id,
+            roles,
+            scopes,
         )
         # 代表的なクレームをそのまま返却 (存在しない場合は None)
         return {
-            "subject": claims.get("sub"),
-            "client_id": token.client_id,
+            "subject": user_id,
+            "client_id": client_id,
             "tenant_id": claims.get("tid"),
             "issuer": claims.get("iss"),
             "object_id": claims.get("oid"),
@@ -43,8 +47,8 @@ def register_tools(mcp: FastMCP) -> None:
             "job_title": claims.get("job_title"),
             "department": claims.get("department"),
             "office_location": claims.get("office_location"),
-            "scopes": token.scopes,
-            "roles": claims.get("roles", []),
+            "scopes": scopes,
+            "roles": roles,
             "amr": claims.get("amr"),
             "auth_methods": claims.get("amr"),
             "issued_at": claims.get("iat"),
