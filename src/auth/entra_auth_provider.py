@@ -14,7 +14,7 @@ from fastmcp.server.auth.auth import AccessToken
 from starlette.authentication import AuthenticationError
 
 from auth.obo_client import OboSettings, OnBehalfOfCredential
-from config import Settings
+from common.config import Settings
 
 logger = logging.getLogger(__name__)
 

@@ -34,24 +34,24 @@ MCP クライアント（例: MCP 対応のエージェント / エディタ拡�
 
 ## ディレクトリ構成
 
-- `main.py`
-  - エントリーポイント。`Settings` と `EntraIDAuthProvider` を使って FastMCP サーバーを起動
-  - tools パッケージから MCP ツールを登録
-- `config.py`
-  - 環境変数を読み込む設定クラス `Settings`
-- `utils.py`
-  - スコープ文字列を整形する `parse_scopes`
-- `auth/entra_auth_provider.py`
-  - Microsoft Entra ID のトークン検証を行う `EntraIDAuthProvider`
-  - OBO Credential を構築する共通関数 `build_obo_credential` を提供
-- `auth/obo_client.py`
-  - ユーザー アクセストークンを使った On-Behalf-Of フローを実装する `OnBehalfOfCredential`
-  - Azure SDK (管理プレーン) から利用可能な `TokenCredential` 実装
-- `tools/`
-  - MCP ツール用パッケージ。`__init__.py` の `register_all_tools(mcp)` が配下モジュールの `register_tools(mcp)` を自動的に呼び出す
-  - `userinfo.py`: `get_user_info` ツールの実装
-  - `azure_vm.py`: Azure Virtual Machines 一覧を取得する `list_azure_vms` ツールの実装
-  - `graph_user.py`: Microsoft Graph API を使用してユーザープロフィールを取得する `get_graph_me` および `get_graph_me_with_select_query` ツールの実装
+- `src/`
+  - MCP サーバーの動作に関わるソースコードを格納
+  - `main.py`
+    - エントリーポイント。`Settings` と `EntraIDAuthProvider` を使って FastMCP サーバーを起動
+    - tools パッケージから MCP ツールを登録
+  - `common/`
+    - 共通ユーティリティモジュール
+    - `config.py`: 環境変数を読み込む設定クラス `Settings`
+    - `utils.py`: スコープ文字列を整形する `parse_scopes` など
+  - `auth/`
+    - 認証関連モジュール
+    - `entra_auth_provider.py`: Microsoft Entra ID のトークン検証を行う `EntraIDAuthProvider`
+    - `obo_client.py`: ユーザー アクセストークンを使った On-Behalf-Of フローを実装する `OnBehalfOfCredential`
+  - `tools/`
+    - MCP ツール用パッケージ。`__init__.py` の `register_all_tools(mcp)` が配下モジュールの `register_tools(mcp)` を自動的に呼び出す
+    - `userinfo.py`: `get_user_info` ツールの実装
+    - `azure_vm.py`: Azure Virtual Machines 一覧を取得する `list_azure_vms` ツールの実装
+    - `graph_user.py`: Microsoft Graph API を使用してユーザープロフィールを取得する `get_graph_me` および `get_graph_me_with_select_query` ツールの実装
 - `.env.example`
   - 必要な環境変数のサンプル
   
@@ -161,10 +161,29 @@ ENTRA_APP_CLIENT_SECRET=your-mcp-api-client-secret-here
 ---
 ## 実行方法
 
+### VS Code から起動（推奨）
+
+VS Code の launch.json に MCP サーバー起動設定が含まれています。
+
+1. VS Code でプロジェクトを開く
+2. `.env` ファイルを作成して環境変数を設定
+3. 実行とデバッグビューで「Run MCP Server」を選択
+4. F5 または「デバッグの開始」で起動
+
+launch.json では PYTHONPATH が自動的に設定され、`src/main.py` が実行されます。
+
+### コマンドラインから起動
+
 uv 経由で MCP サーバーを HTTP 経由で起動する場合:
 
 ```bash
-uv run python main.py
+# Windows (PowerShell)
+$env:PYTHONPATH = "$PWD/src"
+uv run python src/main.py
+
+# Linux/macOS (Bash)
+export PYTHONPATH="$PWD/src"
+uv run python src/main.py
 ```
 
 デフォルトでは以下で待ち受けます:
@@ -223,13 +242,14 @@ az account get-access-token --resource $RESOURCE --query accessToken -o tsv
 3. 実行とデバッグビューで「Run MCP Server」を選択
 4. F5 または「デバッグの開始」で起動
 
-`Run MCP Server` 構成は次のような設定になっており、`.env` を自動で読み込みつつ `main.py` を起動します。
+`Run MCP Server` 構成は次のような設定になっており、`.env` を自動で読み込みつつ `src/main.py` を起動します。
 
-- `program`: `main.py`
+- `program`: `${workspaceFolder}/src/main.py`
 - `envFile`: `${workspaceFolder}/.env`
+- `env`: PYTHONPATH を `${workspaceFolder}/src` に設定
 - コンソール: 統合ターミナル
 
-ブレークポイントを `main.py` や `auth/entra_auth_provider.py` に設定しておくことで、トークン検証やツール実行の挙動をステップ実行で確認できます。
+ブレークポイントを `src/main.py` や `src/auth/entra_auth_provider.py` に設定しておくことで、トークン検証やツール実行の挙動をステップ実行で確認できます。
 
 ---
 

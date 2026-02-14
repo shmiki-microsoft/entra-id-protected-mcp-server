@@ -10,7 +10,7 @@ from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_access_token
 
 from auth.entra_auth_provider import build_obo_credential
-from config import Settings
+from common.config import Settings
 
 logger = logging.getLogger(__name__)
 

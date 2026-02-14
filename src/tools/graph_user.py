@@ -24,7 +24,7 @@ from msgraph.generated.users.item.user_item_request_builder import (
 from kiota_abstractions.base_request_configuration import RequestConfiguration
 
 from auth.entra_auth_provider import build_obo_credential
-from utils import graph_serialize_model
+from common.utils import graph_serialize_model
 
 logger = logging.getLogger(__name__)
 

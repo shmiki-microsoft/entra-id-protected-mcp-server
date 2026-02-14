@@ -10,11 +10,13 @@
 MCP ツール定義は tools パッケージ配下の各モジュールに分離されています。
 """
 import logging
+
 from fastmcp import FastMCP
+
 from auth.entra_auth_provider import EntraIDAuthProvider
-from config import Settings
+from common.config import Settings
+from common.utils import parse_scopes
 from tools import register_all_tools
-from utils import parse_scopes
 
 # 設定の読み込み
 settings = Settings()
