@@ -597,8 +597,9 @@ $token = az account get-access-token --resource $RESOURCE --query accessToken -o
 # トークンの内容を確認 (オプション)
 Write-Host "Token: $token"
 ```
+> **💡 ヒントその 1**: ゲストユーザーでサインインをする場合は、 az login コマンドに --tenant オプションをつけてアクセス先のテナントのテナントID も指定してください
 
-> **💡 ヒント**: 取得したトークンは [jwt.ms](https://jwt.ms) や [jwt.io](https://www.jwt.io/) でデコードして内容を確認できます。`roles`、`scp` などのクレームが正しく含まれているか確認してください。
+> **💡 ヒントその 2**: 取得したトークンは [jwt.ms](https://jwt.ms) や [jwt.io](https://www.jwt.io/) でデコードして内容を確認できます。`roles`、`scp` などのクレームが正しく含まれているか確認してください。
 
 #### 2. MCP Inspector の起動と設定
 
@@ -757,16 +758,3 @@ ENTRA_REQUIRED_SCOPES=access_as_user, User.Read, files.read
 | `obo_token_acquisition_failed` | OBO フロー失敗 | Azure/Graph API アクセス時 |
 
 ---
-
-## ライセンス
-
-このプロジェクトはオープンソースソフトウェアです。詳細はプロジェクトのライセンスファイルを参照してください。
-
-## コントリビューション
-
-Issue や Pull Request を歓迎します。バグ報告、機能リクエスト、コード改善などお気軽にご提案ください。
-
----
-
-**作成者**: Microsoft Entra ID チーム  
-**最終更新**: 2026-02-14
