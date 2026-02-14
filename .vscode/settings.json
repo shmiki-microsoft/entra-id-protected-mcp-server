@@ -4,5 +4,13 @@
   ],
   "python.analysis.extraPaths": [
     "${workspaceFolder}/src"
-  ]
+  ],
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "explicit",
+      "source.organizeImports": "explicit"
+    }
+  }
 }
