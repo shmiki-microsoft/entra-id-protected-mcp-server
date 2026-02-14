@@ -7,66 +7,51 @@
 - ENTRA_APP_CLIENT_ID: アプリ登録のクライアント ID (または API ID URI)
 - ENTRA_REQUIRED_SCOPES: 要求するスコープ (カンマ区切り、任意)
 
+ログレベル設定:
+- APP_LOG_LEVEL: アプリ・Azure SDK・Microsoft Graph SDK のログレベル（統一） (既定: INFO)
+- AUTH_LOG_LEVEL: Entra 認証・MSAL のログレベル (未指定なら APP_LOG_LEVEL と同じ)
+- MCP_SERVER_LOG_LEVEL: MCP サーバーのログレベル (未指定なら APP_LOG_LEVEL と同じ)
+
 MCP ツール定義は tools パッケージ配下の各モジュールに分離されています。
 """
+
 import logging
+import warnings
 
 from fastmcp import FastMCP
 
 from auth.entra_auth_provider import EntraIDAuthProvider
 from common.config import Settings
+from common.logging_config import LoggerConfig
 from common.utils import parse_scopes
 from tools import register_all_tools
+
+# kiota_abstractions と msgraph の DeprecationWarning を非表示
+warnings.filterwarnings(
+    "ignore", category=DeprecationWarning, module="kiota_abstractions.*"
+)
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="msgraph.*")
 
 # 設定の読み込み
 settings = Settings()
 
-# アプリ(このリポジトリのコード)用のログレベル (MCP サーバーも同一レベルを使用)
-MCP_LOG_LEVEL = (settings.mcp_log_level or "INFO").upper()
-
-# Entra 認証プロバイダ用のログレベル (未指定ならアプリと同じ)
-ENTRA_AUTH_LOG_LEVEL = (
-    settings.entra_auth_log_level or settings.mcp_log_level or "INFO"
-).upper()
-# Azure SDK 用のログレベル (未指定ならアプリと同じ)
-AZURE_SDK_LOG_LEVEL = (
-    settings.azure_sdk_log_level or settings.mcp_log_level or "INFO"
-).upper()
-
-# Graph SDK 用のログレベル (未指定ならアプリと同じ)
-GRAPH_SDK_LOG_LEVEL = (
-    settings.graph_sdk_log_level or settings.mcp_log_level or "INFO"
-).upper()
-
-logging.basicConfig(
-    level=MCP_LOG_LEVEL,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+# ロギング設定の初期化
+logger_config = LoggerConfig(
+    app_log_level=settings.app_log_level,
+    auth_log_level=settings.auth_log_level or None,
+    mcp_server_log_level=settings.mcp_server_log_level or None,
 )
+logger_config.configure()
+
 logger = logging.getLogger(__name__)
-
-# 認証プロバイダ/ MSAL のロガーに専用レベルを適用
-logging.getLogger("auth.entra_auth_provider").setLevel(ENTRA_AUTH_LOG_LEVEL)
-logging.getLogger("msal").setLevel(ENTRA_AUTH_LOG_LEVEL)
-
-# Azure SDK  ロガーに専用レベルを適用
-logging.getLogger("azure").setLevel(AZURE_SDK_LOG_LEVEL)
-
-# Microsoft Graph SDK / Kiota ロガーに専用レベルを適用
-logging.getLogger("msgraph").setLevel(GRAPH_SDK_LOG_LEVEL)
-logging.getLogger("kiota").setLevel(GRAPH_SDK_LOG_LEVEL)
 
 # Entra ID 設定 (必須)。`.env` または環境変数から読み込みます。
 tenant_id = settings.entra_tenant_id
 app_client_id = settings.entra_app_client_id
 required_scopes_raw = settings.entra_required_scopes_raw
 
-logger.info("MCP Log Level: %s", MCP_LOG_LEVEL)
-logger.info("Entra Auth Log Level: %s", ENTRA_AUTH_LOG_LEVEL)
-logger.info("Azure SDK Log Level: %s", AZURE_SDK_LOG_LEVEL)
-logger.info("Graph SDK Log Level: %s", GRAPH_SDK_LOG_LEVEL)
+logger.info("Logger Configuration: %s", logger_config)
 logger.info("Entra Tenant ID: %s", tenant_id)
-logger.info("Entra App Client ID: %s", app_client_id)
-logger.info("Entra Required Scopes(raw): %s", required_scopes_raw)
 
 # カンマ区切りの文字列を配列へ変換し、空要素を除去
 required_scopes = parse_scopes(required_scopes_raw)
@@ -94,5 +79,5 @@ if __name__ == "__main__":
         transport=settings.mcp_transport,
         host=settings.mcp_host,
         port=settings.mcp_port,
-        log_level=MCP_LOG_LEVEL,
+        log_level=logger_config.mcp_server_log_level,
     )

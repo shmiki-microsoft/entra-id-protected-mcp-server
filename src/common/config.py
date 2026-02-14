@@ -3,24 +3,29 @@
 
 `.env` を読み込んだ上で、Entra ID 関連とログ・起動設定を提供します。
 """
+
 import os
 from dataclasses import dataclass
+
 
 @dataclass
 class Settings:
     """環境変数から Entra ID とログ・MCP 起動設定を
     読み込んで提供する設定クラス。"""
+
     # Entra ID
     entra_tenant_id: str = os.getenv("ENTRA_TENANT_ID", "")
     # アプリ登録のクライアント ID (または API ID URI)
     entra_app_client_id: str = os.getenv("ENTRA_APP_CLIENT_ID", "")
     entra_required_scopes_raw: str = os.getenv("ENTRA_REQUIRED_SCOPES", "")
 
-    # ログ
-    mcp_log_level: str = os.getenv("MCP_LOG_LEVEL", "INFO")
-    entra_auth_log_level: str = os.getenv("ENTRA_AUTH_LOG_LEVEL", "")
-    azure_sdk_log_level: str = os.getenv("AZURE_SDK_LOG_LEVEL", "")
-    graph_sdk_log_level: str = os.getenv("GRAPH_SDK_LOG_LEVEL", "")
+    # ログレベル（3 種類を個別制御可能）
+    # APP_LOG_LEVEL: アプリ・Azure SDK・Microsoft Graph SDK のログレベル（統一）
+    app_log_level: str = os.getenv("APP_LOG_LEVEL", "INFO")
+    # AUTH_LOG_LEVEL: Entra 認証・MSAL のログレベル（未指定なら APP_LOG_LEVEL）
+    auth_log_level: str = os.getenv("AUTH_LOG_LEVEL", "")
+    # MCP_SERVER_LOG_LEVEL: MCP サーバーのログレベル（未指定なら APP_LOG_LEVEL）
+    mcp_server_log_level: str = os.getenv("MCP_SERVER_LOG_LEVEL", "")
 
     # MCP 起動設定
     mcp_transport: str = os.getenv("MCP_TRANSPORT", "streamable-http")

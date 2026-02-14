@@ -34,7 +34,7 @@ Microsoft Entra ID のアクセストークン検証機能を備えた FastMCP �
   - `python-jose` - JWT 検証
   - `msal` - Microsoft Authentication Library (OBO フロー)
   - `cryptography` - 暗号化処理
-- **Azure SDK**: 
+- **Azure SDK / Microsoft Graph SDK**: 
   - `azure-mgmt-compute` - Azure VM 管理
   - `msgraph-sdk` - Microsoft Graph API クライアント
 - **パッケージ管理**: [uv](https://github.com/astral-sh/uv)
@@ -85,13 +85,20 @@ Microsoft Entra ID のアクセストークン検証機能を備えた FastMCP �
 
 ```
 entra-id-protected-mcp-server/
+├── .vscode/
+│   ├── launch.json                 # VS Code デバッグ設定
+│   └── settings.json               # VS Code エディタ設定
 ├── src/
 │   ├── main.py                     # エントリーポイント
 │   ├── auth/                       # 認証関連
+│   │   ├── __init__.py
 │   │   ├── entra_auth_provider.py # Microsoft Entra ID トークン検証
-│   │   └── obo_client.py          # On-Behalf-Of フロー実装
+│   │   ├── obo_client.py          # On-Behalf-Of フロー実装
+│   │   └── claims_helpers.py      # クレーム情報抽出ヘルパー
 │   ├── common/                     # 共通ユーティリティ
+│   │   ├── __init__.py
 │   │   ├── config.py              # 環境変数設定
+│   │   ├── logging_config.py      # ログ設定管理
 │   │   └── utils.py               # ヘルパー関数
 │   └── tools/                      # MCP ツール
 │       ├── __init__.py            # ツール自動登録
@@ -99,8 +106,10 @@ entra-id-protected-mcp-server/
 │       ├── azure_vm.py            # Azure VM 管理ツール
 │       ├── graph_user.py          # Graph API ツール
 │       └── role_based_info.py     # RBAC ツール
-├── pyproject.toml                  # プロジェクト設定と依存関係
 ├── .env.example                    # 環境変数テンプレート
+├── LOGGING_GUIDE.md                # ログ設定の詳細ガイド
+├── pyproject.toml                  # プロジェクト設定と依存関係
+├── uv.lock                         # uv のロックファイル
 └── README.md                       # このファイル
 ```
 
@@ -111,7 +120,9 @@ entra-id-protected-mcp-server/
 | `main.py` | FastMCP サーバーの初期化と起動。環境設定の読み込み、認証プロバイダの設定、ツールの登録を行う |
 | `auth/entra_auth_provider.py` | JWT トークンの検証。JWKS を取得して署名検証、audience/issuer/スコープのチェックを実施 |
 | `auth/obo_client.py` | MSAL を使用した On-Behalf-Of フローの実装。ユーザートークンをサービストークンに交換 |
+| `auth/claims_helpers.py` | アクセストークンからユーザー情報・ロール・スコープを抽出するヘルパー関数群 |
 | `common/config.py` | 環境変数の一元管理。Microsoft Entra ID 設定、ログレベル、MCP サーバー設定を提供 |
+| `common/logging_config.py` | 3 種類のログレベル（アプリ・認証・MCP サーバー）を個別制御する設定クラス |
 | `common/utils.py` | スコープのパース、Graph モデルのシリアライズなどのヘルパー関数 |
 | `tools/__init__.py` | ツールの自動検出と登録。`tools/` 配下のモジュールを動的にロード |
 | `tools/userinfo.py` | ユーザー情報取得ツール (`get_user_info`) |
@@ -284,11 +295,13 @@ ENTRA_APP_CLIENT_ID=your-client-or-api-id-here
 ENTRA_REQUIRED_SCOPES=access_as_user
 ENTRA_APP_CLIENT_SECRET=your-mcp-api-client-secret-here
 
-# ログレベル設定
-MCP_LOG_LEVEL=INFO
-ENTRA_AUTH_LOG_LEVEL=INFO
-AZURE_SDK_LOG_LEVEL=INFO
-GRAPH_SDK_LOG_LEVEL=INFO
+# ログレベル設定（3 種類を個別制御可能）
+# APP_LOG_LEVEL: アプリ・Azure SDK・Microsoft Graph SDK のログレベル
+APP_LOG_LEVEL=INFO
+# AUTH_LOG_LEVEL: Entra 認証・MSAL のログレベル（未指定なら APP_LOG_LEVEL と同じ）
+AUTH_LOG_LEVEL=INFO
+# MCP_SERVER_LOG_LEVEL: MCP サーバーのログレベル（未指定なら APP_LOG_LEVEL と同じ）
+MCP_SERVER_LOG_LEVEL=INFO
 
 # MCP サーバー設定
 MCP_TRANSPORT=streamable-http
@@ -627,13 +640,15 @@ Inspector 上から以下のツールを対話的にテストできます:
 環境変数でログレベルを細かく制御できます:
 
 ```dotenv
-MCP_LOG_LEVEL=DEBUG              # アプリ全体のログレベル
-ENTRA_AUTH_LOG_LEVEL=DEBUG       # 認証プロバイダのログレベル
-AZURE_SDK_LOG_LEVEL=INFO         # Azure SDK のログレベル
-GRAPH_SDK_LOG_LEVEL=INFO         # Microsoft Graph SDK のログレベル
+# 3 種類のログを個別制御
+APP_LOG_LEVEL=DEBUG              # アプリ・Azure SDK・Microsoft Graph SDK のログレベル
+AUTH_LOG_LEVEL=DEBUG             # Entra 認証・MSAL のログレベル
+MCP_SERVER_LOG_LEVEL=INFO        # MCP サーバーのログレベル
 ```
 
-**ログレベル**: `DEBUG` | `INFO` | `WARN` | `ERROR`
+**ログレベル**: `DEBUG` | `INFO` | `WARNING` | `ERROR` | `CRITICAL`
+
+詳細は [LOGGING_GUIDE.md](LOGGING_GUIDE.md) を参照してください。
 
 ## 開発ガイド
 
