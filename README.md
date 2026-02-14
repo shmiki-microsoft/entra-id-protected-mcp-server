@@ -681,18 +681,24 @@ def register_tools(mcp: FastMCP) -> None:
 ### 認証済みユーザー情報へのアクセス
 
 ```python
-from fastmcp.server.dependencies import get_access_token
+from auth.claims_helpers import get_user_context, has_role
 
 @mcp.tool()
 async def my_tool():
     """認証済みユーザー情報を使用するツール。"""
-    access_token = get_access_token()
+    # ユーザーコンテキストを取得（ヘルパー関数を使用）
+    roles, user_id, client_id, scopes, claims = get_user_context()
     
-    # クレーム情報にアクセス
-    user_id = access_token.claims.get("sub")
-    roles = access_token.claims.get("roles", [])
+    # ロールチェック
+    is_admin = has_role(roles, "Admin")
     
-    return {"user_id": user_id, "roles": roles}
+    return {
+        "user_id": user_id,
+        "client_id": client_id,
+        "roles": roles,
+        "scopes": scopes,
+        "is_admin": is_admin
+    }
 ```
 
 ### OBO フローの使用
@@ -700,13 +706,16 @@ async def my_tool():
 Azure や Graph API にアクセスする場合:
 
 ```python
+from auth.claims_helpers import get_access_token_and_context
 from auth.entra_auth_provider import build_obo_credential
-from fastmcp.server.dependencies import get_access_token
 
 @mcp.tool()
 async def my_azure_tool():
     """Azure リソースにアクセスするツール。"""
-    access_token = get_access_token()
+    # アクセストークンとユーザーコンテキストを取得
+    access_token, roles, user_id, client_id, scopes, claims = (
+        get_access_token_and_context()
+    )
     
     # OBO credential を作成
     credential = build_obo_credential(
@@ -715,7 +724,8 @@ async def my_azure_tool():
     )
     
     # Azure SDK で使用
-    # client = SomeAzureClient(credential, ...)
+    # from azure.mgmt.compute import ComputeManagementClient
+    # client = ComputeManagementClient(credential, subscription_id)
 ```
 
 ### エラーハンドリング
