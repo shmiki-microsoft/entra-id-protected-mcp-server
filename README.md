@@ -922,4 +922,19 @@ Deployment successful.
                              transport 'streamable-http' on http://0.0.0.0:8000/mcp
 ```
 
+#### 2-6. MCP サーバーへの接続
+
+デプロイした MCP サーバーに接続するには、以下の URL を使用します:
+
+```
+https://{App Service ドメイン名}/mcp
+```
+
+**例**: App Service 名が `entra-mcp-server` の場合
+```
+https://entra-mcp-server.azurewebsites.net/mcp
+```
+
+> **💡 ヒント**: App Service のドメイン名は、Azure Portal の **「概要」** ページで確認できます。
+
 ---
