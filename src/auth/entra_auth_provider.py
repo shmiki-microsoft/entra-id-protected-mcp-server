@@ -2,15 +2,16 @@
 Microsoft Entra ID (旧 Azure AD) のトークンを検証する FastMCP 用認証プロバイダ。
 
 このモジュールは、受け取った Bearer トークン (JWT) を Entra ID の公開鍵
-(JWKS) を用いて検証し、必要スコープの満たし合わせを行った上で、
+(JWKS) を用いて検証し、必要なスコープまたはロールの満たし合わせを行った上で、
 FastMCP が扱える `AccessToken` オブジェクトとして返却します。
 """
-import logging
-import requests
-from jose import jwt, JWTError
 
+import logging
+
+import requests
 from fastmcp.server.auth import AuthProvider
 from fastmcp.server.auth.auth import AccessToken
+from jose import JWTError, jwt
 from starlette.authentication import AuthenticationError
 
 from auth.obo_client import OboSettings, OnBehalfOfCredential
@@ -19,9 +20,33 @@ from common.config import Settings
 logger = logging.getLogger(__name__)
 
 
+def _normalize_claim_values(
+    value: str | list[str] | tuple[str, ...] | set[str] | None,
+) -> list[str]:
+    """クレーム値を小文字の文字列リストへ正規化する。"""
+    if not value:
+        return []
+
+    if isinstance(value, str):
+        candidates = value.replace(",", " ").split()
+    elif isinstance(value, (list, tuple, set)):
+        candidates = [str(item) for item in value]
+    else:
+        candidates = [str(value)]
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in candidates:
+        clean = item.strip().lower()
+        if clean and clean not in seen:
+            seen.add(clean)
+            normalized.append(clean)
+    return normalized
+
+
 def build_obo_credential(user_jwt: str, scope: str) -> OnBehalfOfCredential:
     """現在のユーザー トークンを元に OBO 用の Credential を構築する。
-    
+
     :param user_jwt: ユーザーの JWT アクセストークン
     :param scope: OBO 交換に使用するスコープ (例: "https://graph.microsoft.com/.default")
     :return: OnBehalfOfCredential インスタンス
@@ -43,18 +68,22 @@ def build_obo_credential(user_jwt: str, scope: str) -> OnBehalfOfCredential:
     )
     return OnBehalfOfCredential(obo_settings, user_jwt)
 
+
 class EntraIDAuthProvider(AuthProvider):
     """Entra ID ベースのトークン検証を行う認証プロバイダ。
 
     :param tenant_id: Entra テナント ID (GUID)
     :param audience: トークンの受信者 (API/クライアント ID)。`aud`/`azp` と整合
     :param required_scopes: 要求するスコープ一覧 (`scp` に含まれる必要あり)
+    :param required_roles: 要求するアプリ ロール一覧 (`roles` に含まれる必要あり)
     """
+
     def __init__(
         self,
         tenant_id: str,
         audience: str,
         required_scopes: list[str] | None = None,
+        required_roles: list[str] | None = None,
         *,
         jwks_timeout: float = 5.0,
         jwks_max_retries: int = 3,
@@ -63,7 +92,10 @@ class EntraIDAuthProvider(AuthProvider):
         super().__init__()
         self.tenant_id = tenant_id
         self.audience = audience
-        self.required_scopes = required_scopes or []
+        self.required_scopes = []
+        self.custom_required_scopes = _normalize_claim_values(required_scopes or [])
+        self.custom_required_roles = _normalize_claim_values(required_roles or [])
+        self.required_roles = self.custom_required_roles
         self.jwks_timeout = jwks_timeout
         self.jwks_max_retries = jwks_max_retries
         self.jwks_refresh_interval_seconds = jwks_refresh_interval_seconds
@@ -96,11 +128,13 @@ class EntraIDAuthProvider(AuthProvider):
         """Bearer トークン (JWT) を検証し、`AccessToken` を返します。
 
         - 署名、`audience`、`issuer` を検証
-        - `scp` (スコープ) の満たし合わせを実施 (必要な場合)
+        - `scp` または `roles` クレームの満たし合わせを実施 (必要な場合)
         - 問題なければ FastMCP 互換の `AccessToken` を構築
         """
         try:
-            logger.debug("Verifying token: audience=%s issuer=%s", self.audience, self.issuer)
+            logger.debug(
+                "Verifying token: audience=%s issuer=%s", self.audience, self.issuer
+            )
             # JOSE で JWT を検証。Entra の JWKS を用いて署名確認します。
             claims = jwt.decode(
                 token,
@@ -110,18 +144,54 @@ class EntraIDAuthProvider(AuthProvider):
                 issuer=self.issuer,
             )
 
-            # `scp` はスペース区切りの文字列 (例: "user.read files.read")
-            scopes = claims.get("scp", "").split()
+            # `scp` はスペース区切り文字列、`roles` は通常配列
+            scopes = _normalize_claim_values(claims.get("scp", ""))
+            roles = _normalize_claim_values(claims.get("roles", []))
 
-            # 必須スコープが指定されている場合は、すべて含まれているか確認
-            if self.required_scopes:
-                required = set(self.required_scopes)
-                present = set(scopes)
-                if not required.issubset(present):
-                    missing = list(required - present)
-                    logger.warning("Missing required scopes: %s", ", ".join(missing))
-                    raise AuthenticationError(
-                        "missing_required_scopes"
+            # 必須スコープまたは必須ロールのどちらか一方を満たせば成功
+            if self.custom_required_scopes or self.custom_required_roles:
+                scope_ok = False
+                role_ok = False
+
+                if self.custom_required_scopes:
+                    required_scopes = set(self.custom_required_scopes)
+                    present_scopes = set(scopes)
+                    scope_ok = required_scopes.issubset(present_scopes)
+                    if not scope_ok:
+                        missing_scopes = sorted(required_scopes - present_scopes)
+                        logger.debug(
+                            "Required scopes not satisfied. missing=%s",
+                            ", ".join(missing_scopes),
+                        )
+
+                if self.custom_required_roles:
+                    required_roles = set(self.custom_required_roles)
+                    present_roles = set(roles)
+                    role_ok = required_roles.issubset(present_roles)
+                    if not role_ok:
+                        missing_roles = sorted(required_roles - present_roles)
+                        logger.debug(
+                            "Required roles not satisfied. missing=%s",
+                            ", ".join(missing_roles),
+                        )
+
+                if not (scope_ok or role_ok):
+                    logger.warning(
+                        "Missing required permissions. scopes=%s roles=%s",
+                        ", ".join(scopes) if scopes else "(none)",
+                        ", ".join(roles) if roles else "(none)",
+                    )
+                    raise AuthenticationError("missing_required_permissions")
+
+                if scope_ok:
+                    logger.info(
+                        "Token validation succeeded via scopes: %s",
+                        ", ".join(sorted(set(self.custom_required_scopes))),
+                    )
+                if role_ok:
+                    logger.info(
+                        "Token validation succeeded via roles: %s",
+                        ", ".join(sorted(set(self.custom_required_roles))),
                     )
 
             # FastMCP の `AccessToken` として返却 (クライアント ID は `azp`/`appid`)

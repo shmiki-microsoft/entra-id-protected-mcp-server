@@ -6,6 +6,7 @@
 - ENTRA_TENANT_ID: テナント ID (GUID)
 - ENTRA_APP_CLIENT_ID: アプリ登録のクライアント ID (または API ID URI)
 - ENTRA_REQUIRED_SCOPES: 要求するスコープ (カンマ区切り、任意)
+- ENTRA_REQUIRED_ROLES: 要求するアプリ ロール (カンマ区切り、任意)
 
 ログレベル設定:
 - APP_LOG_LEVEL: アプリ・Azure SDK・Microsoft Graph SDK のログレベル（統一） (既定: INFO)
@@ -49,15 +50,21 @@ logger = logging.getLogger(__name__)
 tenant_id = settings.entra_tenant_id
 app_client_id = settings.entra_app_client_id
 required_scopes_raw = settings.entra_required_scopes_raw
+required_roles_raw = settings.entra_required_roles_raw
 
 logger.info("Logger Configuration: %s", logger_config)
 logger.info("Entra Tenant ID: %s", tenant_id)
 
 # カンマ区切りの文字列を配列へ変換し、空要素を除去
 required_scopes = parse_scopes(required_scopes_raw)
+required_roles = parse_scopes(required_roles_raw)
 logger.info(
     "Entra Required Scopes: %s",
     ", ".join(required_scopes) if required_scopes else "(none)",
+)
+logger.info(
+    "Entra Required Roles: %s",
+    ", ".join(required_roles) if required_roles else "(none)",
 )
 
 # Entra ID ベースの認証プロバイダを初期化
@@ -65,6 +72,7 @@ auth_provider = EntraIDAuthProvider(
     tenant_id=tenant_id,
     audience=app_client_id,
     required_scopes=required_scopes,
+    required_roles=required_roles,
 )
 
 # FastMCP サーバーを作成 (MCP ツール定義はこのインスタンスに紐付く)

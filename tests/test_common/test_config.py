@@ -18,6 +18,7 @@ class TestSettings(unittest.TestCase):
             "ENTRA_TENANT_ID",
             "ENTRA_APP_CLIENT_ID",
             "ENTRA_REQUIRED_SCOPES",
+            "ENTRA_REQUIRED_ROLES",
             "ENTRA_APP_CLIENT_SECRET",
             "APP_LOG_LEVEL",
             "AUTH_LOG_LEVEL",
@@ -42,6 +43,7 @@ class TestSettings(unittest.TestCase):
             self.assertEqual(settings.entra_tenant_id, "")
             self.assertEqual(settings.entra_app_client_id, "")
             self.assertEqual(settings.entra_required_scopes_raw, "")
+            self.assertEqual(settings.entra_required_roles_raw, "")
             self.assertEqual(settings.app_log_level, "INFO")
             self.assertEqual(settings.auth_log_level, "")
             self.assertEqual(settings.mcp_server_log_level, "")
@@ -59,6 +61,7 @@ class TestSettings(unittest.TestCase):
             "ENTRA_TENANT_ID": "test-tenant-id",
             "ENTRA_APP_CLIENT_ID": "test-client-id",
             "ENTRA_REQUIRED_SCOPES": "user.read,files.read",
+            "ENTRA_REQUIRED_ROLES": "access_as_application",
             "APP_LOG_LEVEL": "DEBUG",
             "AUTH_LOG_LEVEL": "WARNING",
             "MCP_SERVER_LOG_LEVEL": "ERROR",
@@ -81,6 +84,7 @@ class TestSettings(unittest.TestCase):
             self.assertEqual(settings.entra_tenant_id, "test-tenant-id")
             self.assertEqual(settings.entra_app_client_id, "test-client-id")
             self.assertEqual(settings.entra_required_scopes_raw, "user.read,files.read")
+            self.assertEqual(settings.entra_required_roles_raw, "access_as_application")
             self.assertEqual(settings.app_log_level, "DEBUG")
             self.assertEqual(settings.auth_log_level, "WARNING")
             self.assertEqual(settings.mcp_server_log_level, "ERROR")

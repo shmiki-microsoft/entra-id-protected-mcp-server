@@ -15,7 +15,7 @@ from starlette.authentication import AuthenticationError
 from auth.entra_auth_provider import EntraIDAuthProvider, build_obo_credential
 
 
-class TestEntraIDAuthProvider(unittest.TestCase):
+class TestEntraIDAuthProvider(unittest.IsolatedAsyncioTestCase):
     """Tests for EntraIDAuthProvider class."""
 
     def setUp(self):
@@ -23,6 +23,7 @@ class TestEntraIDAuthProvider(unittest.TestCase):
         self.tenant_id = "test-tenant-id"
         self.audience = "test-audience"
         self.required_scopes = ["user.read", "files.read"]
+        self.required_roles = ["access_as_application"]
 
     @patch("auth.entra_auth_provider.requests.get")
     def test_provider_initialization_success(self, mock_get):
@@ -37,11 +38,14 @@ class TestEntraIDAuthProvider(unittest.TestCase):
             tenant_id=self.tenant_id,
             audience=self.audience,
             required_scopes=self.required_scopes,
+            required_roles=self.required_roles,
         )
 
         self.assertEqual(provider.tenant_id, self.tenant_id)
         self.assertEqual(provider.audience, self.audience)
-        self.assertEqual(provider.required_scopes, self.required_scopes)
+        self.assertEqual(provider.required_scopes, [])
+        self.assertEqual(provider.custom_required_scopes, self.required_scopes)
+        self.assertEqual(provider.required_roles, self.required_roles)
         self.assertEqual(
             provider.issuer, f"https://login.microsoftonline.com/{self.tenant_id}/v2.0"
         )
@@ -63,9 +67,12 @@ class TestEntraIDAuthProvider(unittest.TestCase):
 
         self.assertIn("jwks_fetch_failed", str(context.exception))
 
+    @patch("auth.entra_auth_provider.logger.info")
     @patch("auth.entra_auth_provider.jwt.decode")
     @patch("auth.entra_auth_provider.requests.get")
-    async def test_verify_token_success(self, mock_get, mock_jwt_decode):
+    async def test_verify_token_success(
+        self, mock_get, mock_jwt_decode, mock_logger_info
+    ):
         """Test verify_token successfully validates a token."""
         # Mock JWKS response
         mock_response = MagicMock()
@@ -93,21 +100,29 @@ class TestEntraIDAuthProvider(unittest.TestCase):
         self.assertEqual(access_token.token, "test-jwt-token")
         self.assertEqual(access_token.scopes, ["user.read", "files.read"])
         self.assertEqual(access_token.client_id, "test-client-id")
+        mock_logger_info.assert_any_call(
+            "Token validation succeeded via scopes: %s",
+            "files.read, user.read",
+        )
 
+    @patch("auth.entra_auth_provider.logger.info")
     @patch("auth.entra_auth_provider.jwt.decode")
     @patch("auth.entra_auth_provider.requests.get")
-    async def test_verify_token_missing_scopes(self, mock_get, mock_jwt_decode):
-        """Test verify_token raises error when required scopes are missing."""
+    async def test_verify_token_success_with_required_role(
+        self, mock_get, mock_jwt_decode, mock_logger_info
+    ):
+        """Test verify_token succeeds when the required app role is present."""
         # Mock JWKS response
         mock_response = MagicMock()
         mock_response.json.return_value = {"keys": [{"kid": "test-key-id"}]}
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
-        # Mock JWT decode - missing required scope
+        # Mock JWT decode - scope is incomplete, but role is present
         mock_jwt_decode.return_value = {
-            "sub": "test-user-id",
-            "scp": "user.read",  # Missing files.read
+            "sub": "test-app-id",
+            "scp": "user.read",
+            "roles": ["access_as_application"],
             "azp": "test-client-id",
         }
 
@@ -115,12 +130,49 @@ class TestEntraIDAuthProvider(unittest.TestCase):
             tenant_id=self.tenant_id,
             audience=self.audience,
             required_scopes=self.required_scopes,
+            required_roles=self.required_roles,
+        )
+
+        access_token = await provider.verify_token("test-jwt-token")
+
+        self.assertEqual(access_token.token, "test-jwt-token")
+        self.assertEqual(access_token.client_id, "test-client-id")
+        mock_logger_info.assert_any_call(
+            "Token validation succeeded via roles: %s",
+            "access_as_application",
+        )
+
+    @patch("auth.entra_auth_provider.jwt.decode")
+    @patch("auth.entra_auth_provider.requests.get")
+    async def test_verify_token_missing_required_permissions(
+        self, mock_get, mock_jwt_decode
+    ):
+        """Test verify_token raises error when neither required scopes nor roles are present."""
+        # Mock JWKS response
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"keys": [{"kid": "test-key-id"}]}
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        # Mock JWT decode - neither required scopes nor required roles are satisfied
+        mock_jwt_decode.return_value = {
+            "sub": "test-user-id",
+            "scp": "user.read",
+            "roles": ["some_other_role"],
+            "azp": "test-client-id",
+        }
+
+        provider = EntraIDAuthProvider(
+            tenant_id=self.tenant_id,
+            audience=self.audience,
+            required_scopes=self.required_scopes,
+            required_roles=self.required_roles,
         )
 
         with self.assertRaises(AuthenticationError) as context:
             await provider.verify_token("test-jwt-token")
 
-        self.assertIn("missing_required_scopes", str(context.exception))
+        self.assertIn("missing_required_permissions", str(context.exception))
 
     @patch("auth.entra_auth_provider.jwt.decode")
     @patch("auth.entra_auth_provider.requests.get")
@@ -215,7 +267,7 @@ class TestBuildOboCredential(unittest.TestCase):
         user_jwt = "test-user-jwt"
         scope = "https://graph.microsoft.com/.default"
 
-        result = build_obo_credential(user_jwt, scope)
+        build_obo_credential(user_jwt, scope)
 
         # Verify OnBehalfOfCredential was called
         mock_obo_credential.assert_called_once()

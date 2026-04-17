@@ -18,12 +18,13 @@ class Settings:
     # アプリ登録のクライアント ID (または API ID URI)
     entra_app_client_id: str = os.getenv("ENTRA_APP_CLIENT_ID", "")
     entra_required_scopes_raw: str = os.getenv("ENTRA_REQUIRED_SCOPES", "")
+    entra_required_roles_raw: str = os.getenv("ENTRA_REQUIRED_ROLES", "")
 
     # ログレベル（3 種類を個別制御可能）
     # APP_LOG_LEVEL: アプリ・Azure SDK・Microsoft Graph SDK のログレベル（統一）
     app_log_level: str = os.getenv("APP_LOG_LEVEL", "INFO")
-    # AUTH_LOG_LEVEL: Entra 認証・MSAL のログレベル（未指定なら APP_LOG_LEVEL）
-    auth_log_level: str = os.getenv("AUTH_LOG_LEVEL", "")
+    # ENTRA_AUTH_LOG_LEVEL: Entra 認証・MSAL のログレベル（未指定なら APP_LOG_LEVEL）
+    auth_log_level: str = os.getenv("ENTRA_AUTH_LOG_LEVEL", "")
     # MCP_SERVER_LOG_LEVEL: MCP サーバーのログレベル（未指定なら APP_LOG_LEVEL）
     mcp_server_log_level: str = os.getenv("MCP_SERVER_LOG_LEVEL", "")
 
