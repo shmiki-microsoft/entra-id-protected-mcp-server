@@ -54,6 +54,7 @@ required_roles_raw = settings.entra_required_roles_raw
 
 logger.info("Logger Configuration: %s", logger_config)
 logger.info("Entra Tenant ID: %s", tenant_id)
+logger.info("Entra App Client ID: %s", app_client_id)
 
 # カンマ区切りの文字列を配列へ変換し、空要素を除去
 required_scopes = parse_scopes(required_scopes_raw)
