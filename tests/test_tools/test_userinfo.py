@@ -1,9 +1,9 @@
 """Unit tests for tools.userinfo module."""
 
+import asyncio
 import os
 import sys
 import unittest
-import asyncio
 from unittest.mock import patch
 
 from fastmcp import FastMCP
@@ -26,47 +26,37 @@ class TestUserInfoTools(unittest.TestCase):
 
     @patch("tools.userinfo.get_user_context")
     def test_get_user_info_success(self, mock_get_user_context):
-        """Test get_user_info returns user information correctly."""
-        # Mock user context
+        """Test get_user_info returns raw access-token claims only."""
+        mock_claims = {
+            "aud": "api://test-audience",
+            "sub": "test-user-id",
+            "tid": "test-tenant-id",
+            "iss": "https://login.microsoftonline.com/test-tenant/v2.0",
+            "roles": ["Admin", "User"],
+            "amr": ["pwd", "mfa"],
+            "xms_ftd": "test-ftd-claim",
+        }
         mock_get_user_context.return_value = (
-            ["Admin", "User"],  # roles
-            "test-user-id",  # user_id
-            "test-client-id",  # client_id
-            ["user.read", "files.read"],  # scopes
-            {  # claims
-                "sub": "test-user-id",
-                "tid": "test-tenant-id",
-                "iss": "https://login.microsoftonline.com/test-tenant/v2.0",
-                "oid": "test-object-id",
-                "upn": "testuser@example.com",
-                "email": "testuser@example.com",
-                "name": "Test User",
-                "given_name": "Test",
-                "family_name": "User",
-                "job_title": "Developer",
-                "department": "Engineering",
-                "office_location": "Seattle",
-                "iat": 1234567890,
-                "exp": 1234571490,
-                "nbf": 1234567890,
-                "appid": "test-app-id",
-                "azp": "test-azp",
-                "idp": "https://sts.windows.net/test-idp/",
-                "ver": "2.0",
-                "amr": ["pwd", "mfa"],
-            },
+            ["Admin", "User"],
+            "test-user-id",
+            "test-client-id",
+            ["user.read", "files.read"],
+            mock_claims,
         )
 
-        # Get the tool function
         tool_names = [
             tool if isinstance(tool, str) else tool.name
             for tool in asyncio.run(self.mcp.get_tools())
         ]
         self.assertIn("get_user_info", tool_names)
 
-        # Note: Testing actual tool execution would require FastMCP's runtime context
-        # This test verifies the tool is registered correctly
-        self.assertIn("get_user_info", tool_names)
+        result = asyncio.run(self.mcp._tool_manager.call_tool("get_user_info", {}))
+        payload = result.structured_content
+
+        self.assertEqual(payload, mock_claims)
+        self.assertNotIn("client_id", payload)
+        self.assertNotIn("subject", payload)
+        self.assertNotIn("all_claims", payload)
 
     def test_tool_registered(self):
         """Test that get_user_info tool is registered."""
